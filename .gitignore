@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+env/
+
+# Node / React
+node_modules/
+frontend/dist/
+frontend/build/
+.env
+.env.local
+
+# Data (souvent trop volumineux pour git)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Modèles ML entraînés (volumineux)
+backend/app/ml/saved_models/*
+!backend/app/ml/saved_models/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
