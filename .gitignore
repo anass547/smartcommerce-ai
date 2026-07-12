@@ -37,3 +37,7 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Dev Tools (local only)
+dev_tools/
+
