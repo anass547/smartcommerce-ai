@@ -6,6 +6,21 @@ from app.database import get_db
 router = APIRouter()
 
 
+@router.get("")
+@router.get("/")
+def get_kpis(db: Session = Depends(get_db)):
+    """
+    Retourne les KPIs généraux pour le dashboard.
+    """
+    return {
+        "revenue": 0,
+        "orders_count": 0,
+        "avg_order_value": 0,
+        "sales_over_time": [{"date": "2024-01-01", "revenue": 0}],
+        "top_products": [{"name": "", "revenue": 0, "units_sold": 0}]
+    }
+
+
 @router.get("/summary")
 def get_kpis_summary(db: Session = Depends(get_db)):
     """
@@ -28,3 +43,4 @@ def get_sales_evolution(db: Session = Depends(get_db)):
     TODO: agrégation SQL par jour/semaine/mois.
     """
     return {"data": []}
+
