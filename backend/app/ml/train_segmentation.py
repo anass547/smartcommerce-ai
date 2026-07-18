@@ -42,47 +42,47 @@ def train():
     kmeans = KMeans(n_clusters=4, random_state=42)
     rfm["cluster"] = kmeans.fit_predict(rfm_scaled)
 
-    # Save trained scaler and model
-    SAVED_MODELS_DIR.mkdir(exist_ok=True)
-    model_path = SAVED_MODELS_DIR / "segmentation_model.pkl"
-    with open(model_path, "wb") as f:
-        pickle.dump({"kmeans": kmeans, "scaler": scaler}, f)
-    print(f"Model and scaler saved to {model_path}.")
-
     # Programmatic cluster labeling based on centroids
     print("Labeling clusters based on centroids...")
+    
+    # 1. Compute the mean recency, frequency, monetary per cluster
     means = rfm.groupby("cluster")[["recency", "frequency", "monetary"]].mean()
     
-    # 1. VIP: highest monetary value
-    vip_cluster = means["monetary"].idxmax()
+    # 2. Build a composite score per cluster: rank(monetary) + rank(frequency) + rank(-recency)
+    # We rank clusters' means across the 4 clusters. Higher rank means better (more monetary, more frequency, less recency).
+    # Since recency is lower-is-better, we invert it (using -recency) to make lower recency values get higher ranks.
+    monetary_rank = means["monetary"].rank(ascending=True)
+    frequency_rank = means["frequency"].rank(ascending=True)
+    recency_rank = (-means["recency"]).rank(ascending=True)
     
-    # 2. À risque: highest recency (excluding VIP)
-    remaining_clusters = [c for c in range(4) if c != vip_cluster]
-    at_risk_cluster = means.loc[remaining_clusters, "recency"].idxmax()
+    composite_score = monetary_rank + frequency_rank + recency_rank
     
-    # 3. Fidèles vs Occasionnels among remaining two
-    last_two = [c for c in remaining_clusters if c != at_risk_cluster]
-    c1, c2 = last_two[0], last_two[1]
-    if means.loc[c1, "frequency"] > means.loc[c2, "frequency"]:
-        loyal_cluster = c1
-        occasional_cluster = c2
-    else:
-        loyal_cluster = c2
-        occasional_cluster = c1
+    # Sort clusters by this score descending
+    sorted_clusters = composite_score.sort_values(ascending=False).index.tolist()
+    
+    # Assign labels in order: "VIP" (best score), "Fidèles", "Occasionnels", "À risque" (worst score)
+    labels = ["VIP", "Fidèles", "Occasionnels", "À risque"]
+    cluster_to_label = dict(zip(sorted_clusters, labels))
 
-    cluster_labels = {
-        vip_cluster: "VIP",
-        loyal_cluster: "Fidèles",
-        occasional_cluster: "Occasionnels",
-        at_risk_cluster: "À risque"
-    }
+    # Save trained scaler, model, and cluster_to_label mapping dict
+    SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model_path = SAVED_MODELS_DIR / "segmentation_model.pkl"
+    with open(model_path, "wb") as f:
+        pickle.dump({
+            "kmeans": kmeans, 
+            "scaler": scaler,
+            "cluster_to_label": cluster_to_label
+        }, f)
+    print(f"Model, scaler and mapping dict saved to {model_path}.")
     
-    rfm["segment_name"] = rfm["cluster"].map(cluster_labels)
+    rfm["segment_label"] = rfm["cluster"].map(cluster_to_label)
 
     # Print summary of clusters
-    print("\nTraining summary:")
-    for cluster_id, label in cluster_labels.items():
-        count = len(rfm[rfm["cluster"] == cluster_id])
+    print("\nTraining summary (counts per segment label):")
+    for label in labels:
+        count = len(rfm[rfm["segment_label"] == label])
+        # Find which cluster ID corresponds to this label
+        cluster_id = [cid for cid, lbl in cluster_to_label.items() if lbl == label][0]
         print(f"  Segment: {label} (Cluster {cluster_id}) -> Count: {count}")
         print(f"    Mean Recency: {means.loc[cluster_id, 'recency']:.1f} days")
         print(f"    Mean Frequency: {means.loc[cluster_id, 'frequency']:.2f} orders")
@@ -97,6 +97,17 @@ def train():
     cust_map = pd.read_csv(map_path)
     # Merge RFM results with mapping
     customer_segments = cust_map.merge(rfm, on="customer_unique_id", how="inner")
+    
+    # Keep only the requested columns
+    customer_segments = customer_segments[[
+        "customer_id",
+        "customer_unique_id",
+        "recency",
+        "frequency",
+        "monetary",
+        "cluster",
+        "segment_label"
+    ]]
     
     # Save the full mapped segments CSV
     segments_output_path = BASE_DIR / "data" / "processed" / "customer_segments.csv"
