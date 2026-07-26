@@ -1,5 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+import inspect
+
+from app.database import get_db
+from app.assistant.rules import RULES
 
 router = APIRouter()
 
@@ -23,12 +28,31 @@ def get_available_questions():
 
 
 @router.post("/ask")
-def ask_assistant(payload: AssistantQuestion):
+def ask_assistant(payload: AssistantQuestion, db: Session = Depends(get_db)):
     """
     Combine statistiques + règles métier + templates pour générer une réponse.
-    TODO: implémenter app.assistant.rules pour router vers la bonne logique.
     """
+    question_id = payload.question_id
+    if question_id not in RULES:
+        return {
+            "question_id": question_id,
+            "answer": "Question non reconnue par l'assistant.",
+        }
+
+    try:
+        rule_func = RULES[question_id]
+        
+        # Check if the rule function expects a 'db' parameter
+        sig = inspect.signature(rule_func)
+        if "db" in sig.parameters:
+            answer = rule_func(db)
+        else:
+            answer = rule_func()
+    except Exception:
+        # Fallback message on failure as requested
+        answer = "Je n'ai pas pu générer de réponse pour cette question."
+
     return {
-        "question_id": payload.question_id,
-        "answer": "Réponse générée automatiquement (à implémenter).",
+        "question_id": question_id,
+        "answer": answer,
     }
