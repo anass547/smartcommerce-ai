@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { getForecast } from "../services/api";
+import ForecastChart from "../components/forecast/ForecastChart";
 
 export default function ForecastPage() {
   const [horizon, setHorizon] = useState("week");
   const [forecast, setForecast] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getForecast(horizon).then(setForecast).catch(console.error);
+    setLoading(true);
+    getForecast(horizon)
+      .then((data) => {
+        setForecast(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
   }, [horizon]);
 
   return (
@@ -17,16 +28,24 @@ export default function ForecastPage() {
           <button
             key={h}
             onClick={() => setHorizon(h)}
-            className={`px-3 py-1 rounded ${
-              horizon === h ? "bg-slate-900 text-white" : "bg-slate-100"
+            className={`px-3 py-1 rounded transition-colors text-sm font-medium ${
+              horizon === h ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
           >
-            {h}
+            {h === "day" ? "Jour" : h === "week" ? "Semaine" : "Mois"}
           </button>
         ))}
       </div>
-      {/* TODO: remplacer par ForecastChart (Chart.js) avec forecast.predictions */}
-      <pre className="text-sm text-slate-500">{JSON.stringify(forecast, null, 2)}</pre>
+
+      {loading ? (
+        <div className="bg-white rounded-lg shadow p-6 border border-slate-100 flex flex-col items-center justify-center h-80 animate-pulse">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-slate-900 mb-4"></div>
+          <p className="text-slate-500 text-sm">Chargement des prévisions...</p>
+        </div>
+      ) : (
+        <ForecastChart predictions={forecast?.predictions ?? []} />
+      )}
     </div>
   );
 }
+
